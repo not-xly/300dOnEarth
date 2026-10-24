@@ -57,31 +57,3 @@ const CLIMATE = {
     ],
   },
 };
-
-// Ejemplo de planificación para probar la app. Se carga con el botón "Ejemplo".
-const SAMPLE_BASES = [
-  {
-    name: "Vancouver", country: "Canadá", lat: 49.28, lng: -123.12, days: 30, destinations: [
-      { name: "Whistler", lat: 50.12, lng: -122.95, km: 120, hours: 2, notes: "Aprox." },
-      { name: "Victoria", lat: 48.43, lng: -123.37, km: null, hours: 4, notes: "Ferry + carretera (aprox.)" },
-    ],
-  },
-  {
-    name: "Los Ángeles", country: "Estados Unidos", lat: 34.05, lng: -118.24, days: 45, destinations: [
-      { name: "San Diego", lat: 32.72, lng: -117.16, km: 190, hours: 2.5 },
-      { name: "Joshua Tree", lat: 33.87, lng: -115.90, km: 200, hours: 3 },
-    ],
-  },
-  {
-    name: "Cancún", country: "México", lat: 21.16, lng: -86.85, days: 60, destinations: [
-      { name: "Tulum", lat: 20.21, lng: -87.47, km: 130, hours: 2 },
-      { name: "Chichén Itzá", lat: 20.68, lng: -88.57, km: 200, hours: 2.5 },
-    ],
-  },
-  {
-    name: "Ciudad de Guatemala", country: "Guatemala", lat: 14.63, lng: -90.51, days: 40, destinations: [
-      { name: "Antigua Guatemala", lat: 14.56, lng: -90.73, km: 45, hours: 1 },
-      { name: "Lago de Atitlán", lat: 14.69, lng: -91.20, km: 150, hours: 3.5 },
-    ],
-  },
-];

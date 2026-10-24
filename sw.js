@@ -1,6 +1,6 @@
 // Cambia la versión del caché cuando modifiques los archivos de la app,
 // para que los iPhone descarguen la nueva versión.
-const CACHE = "300dOnEarth-v2";
+const CACHE = "300dOnEarth-v3";
 const ASSETS = ["./", "index.html", "styles.css", "data.js", "data-cities.js", "data-world.js", "app.js", "manifest.json"];
 
 self.addEventListener("install", (event) => {

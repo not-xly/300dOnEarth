@@ -6,6 +6,8 @@ const LEVEL_LABEL = { alto: "Alto", medio: "Medio", bajo: "Bajo" };
 // Nombres en español para entradas del catálogo, por código de país ISO2 y nombre original.
 const ES_NAMES = { "GT|Guatemala": "Ciudad de Guatemala", "US|Los Angeles": "Los Ángeles", "MX|Cancun": "Cancún" };
 const WORLD_VIEW = { x: 0, y: 0, w: 360, h: 180 };
+// Punto de partida del viaje. No es una base: no suma días a los 300.
+const ORIGIN = { name: "Madrid", country: "España", lat: 40.42, lng: -3.70 };
 
 const $ = (sel) => document.querySelector(sel);
 const startInput = $("#startDate");
@@ -297,9 +299,13 @@ function renderSummary() {
 }
 
 function renderTimeline() {
-  timelineEl.innerHTML = "";
+  timelineEl.innerHTML = `
+    <article class="origin">
+      <strong>Salida: ${ORIGIN.name}</strong>
+      <span class="meta">${ORIGIN.country} · no cuenta en los 300 días</span>
+    </article>`;
   if (!state.bases.length) {
-    timelineEl.innerHTML = '<p class="empty">Añade tu primera ciudad base con «+ Ciudad base».</p>';
+    timelineEl.insertAdjacentHTML("beforeend", '<p class="empty">Añade tu primera ciudad base con «+ Ciudad base».</p>');
     return;
   }
   layout().forEach(({ base, from, to }) => {
@@ -374,14 +380,22 @@ function startDrag(e) {
 
 // ---------- Mapa ----------
 
+// Paradas del recorrido: Madrid (salida) seguida de las bases en orden
+function stops() {
+  return [
+    { n: "S", name: ORIGIN.name, lat: ORIGIN.lat, lng: ORIGIN.lng },
+    ...state.bases.map((b, i) => ({ n: i + 1, name: b.name, lat: b.lat, lng: b.lng, days: b.days })),
+  ];
+}
+
 function routePoints() {
   const pts = [];
   let lon = null;
-  state.bases.forEach((b, i) => {
-    if (b.lat == null || b.lng == null) return;
+  stops().forEach((s) => {
+    if (s.lat == null || s.lng == null) return;
     // Desenrollar la longitud para que el recorrido cruce el antimeridiano sin dar la vuelta al mapa
-    lon = lon == null ? b.lng : lon + wrap180(b.lng - lon);
-    pts.push({ n: i + 1, name: b.name, lat: b.lat, lon, x: lon + 180, y: 90 - b.lat });
+    lon = lon == null ? s.lng : lon + wrap180(s.lng - lon);
+    pts.push({ ...s, lon, x: lon + 180, y: 90 - s.lat });
   });
   return pts;
 }
@@ -410,27 +424,28 @@ function drawMarkers() {
 }
 
 function renderLegend() {
-  const total = routePoints().length;
-  const bases = state.bases;
+  const list = stops();
   let km = 0;
-  const rows = bases.map((b, i) => {
-    const next = bases[i + 1];
+  const rows = list.map((st, i) => {
+    const next = list[i + 1];
     let leg = "";
     if (next) {
-      if (b.lat != null && next.lat != null) {
-        const d = Math.round(haversine(b.lat, b.lng, next.lat, next.lng));
+      if (st.lat != null && next.lat != null) {
+        const d = Math.round(haversine(st.lat, st.lng, next.lat, next.lng));
         km += d;
         leg = `<li class="leg">↓ ${d.toLocaleString("es-ES")} km</li>`;
       } else {
         leg = `<li class="leg">↓ distancia desconocida</li>`;
       }
     }
+    const meta = st.days ? `${st.days} días` : "salida, no cuenta en los 300 días";
     return `
-      <li><span class="num">${i + 1}</span><strong>${esc(b.name)}</strong>
-        <span class="meta">${b.days} días${b.lat == null ? " · sin coordenadas" : ""}</span></li>${leg}`;
+      <li><span class="num">${st.n}</span><strong>${esc(st.name)}</strong>
+        <span class="meta">${meta}${st.lat == null ? " · sin coordenadas" : ""}</span></li>${leg}`;
   });
-  mapLegend.innerHTML = rows.join("") || '<li class="meta">Añade ciudades base para ver el recorrido.</li>';
-  mapStats.textContent = `${bases.length} bases · ${total} con ubicación · ${km.toLocaleString("es-ES")} km en línea recta`;
+  mapLegend.innerHTML = rows.join("");
+  const located = state.bases.filter((b) => b.lat != null).length;
+  mapStats.textContent = `${state.bases.length} bases · ${located} con ubicación · ${km.toLocaleString("es-ES")} km en línea recta`;
 }
 
 function setView(v) {
@@ -767,34 +782,6 @@ $("#baseForm").addEventListener("submit", (e) => {
   save();
   renderAll();
   baseDialog.close();
-});
-
-$("#exportBtn").addEventListener("click", () => {
-  const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const a = Object.assign(document.createElement("a"), { href: url, download: "300dOnEarth.json" });
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-});
-
-$("#importFile").addEventListener("change", async (e) => {
-  const file = e.target.files[0];
-  e.target.value = "";
-  if (!file) return;
-  try {
-    state = normalizeState(JSON.parse(await file.text()));
-    save();
-    renderAll();
-  } catch {
-    alert("El archivo no es válido.");
-  }
-});
-
-$("#sampleBtn").addEventListener("click", () => {
-  if (state.bases.length && !confirm("Esto reemplazará tu planificación actual. ¿Continuar?")) return;
-  state = normalizeState({ startDate: state.startDate, bases: SAMPLE_BASES });
-  save();
-  renderAll();
 });
 
 // ---------- Arranque ----------

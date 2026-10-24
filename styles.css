@@ -127,6 +127,16 @@ button, .btn {
   justify-content: center;
 }
 .bottombar > * { flex: 1; }
+.origin {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1px dashed #9fb8c4;
+  border-radius: 12px;
+  background: #eef5f8;
+}
 button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
 button.danger { color: var(--alto); border-color: #f0c4bf; }
 button.small { min-height: 32px; font-size: 13px; }
