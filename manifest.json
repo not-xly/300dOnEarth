@@ -1,0 +1,11 @@
+{
+  "name": "300dOnEarth",
+  "short_name": "300dOnEarth",
+  "lang": "es",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f4f7f9",
+  "theme_color": "#1f6f8b"
+}

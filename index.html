@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="300dOnEarth">
+  <meta name="theme-color" content="#1f6f8b">
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="styles.css">
+  <title>300dOnEarth</title>
+</head>
+<body>
+  <header class="top">
+    <h1>300dOnEarth</h1>
+    <label>Inicio
+      <input type="date" id="startDate">
+    </label>
+  </header>
+
+  <nav class="tabs">
+    <button class="tab active" data-view="timeline">Línea temporal</button>
+    <button class="tab" data-view="map">Mapa</button>
+  </nav>
+
+  <section class="view" id="view-timeline">
+    <section class="summary" id="summary"></section>
+
+    <main class="timeline" id="timeline"></main>
+
+    <footer class="bottombar">
+      <button id="addBase">+ Ciudad base</button>
+      <button id="exportBtn">Exportar</button>
+      <label class="btn">Importar
+        <input type="file" id="importFile" accept="application/json" hidden>
+      </label>
+      <button id="sampleBtn">Ejemplo</button>
+    </footer>
+  </section>
+
+  <section class="view" id="view-map" hidden>
+    <div class="map-toolbar">
+      <span class="meta" id="mapStats"></span>
+      <div class="row">
+        <button class="small" id="fitBtn">Ver ruta</button>
+        <button class="small" id="worldBtn">Mundo</button>
+        <button class="small" id="zoomIn">+</button>
+        <button class="small" id="zoomOut">−</button>
+      </div>
+    </div>
+    <svg id="mapSvg" viewBox="0 0 360 180" preserveAspectRatio="xMidYMid meet">
+      <defs></defs>
+      <g class="land" id="mapLand"></g>
+      <polyline id="mapRoute" class="route" vector-effect="non-scaling-stroke"></polyline>
+      <g id="mapMarkers"></g>
+    </svg>
+    <ol class="legend" id="mapLegend"></ol>
+  </section>
+
+  <dialog id="baseDialog">
+    <form id="baseForm">
+      <h2>Nueva ciudad base</h2>
+      <div id="basePickerHost"></div>
+      <label>Días
+        <input name="days" type="number" inputmode="numeric" min="1" value="14" required>
+      </label>
+      <div class="row">
+        <button type="button" id="cancelBase">Cancelar</button>
+        <button type="submit" class="primary">Añadir</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="sheet">
+    <div class="row">
+      <button id="closeSheet" class="small">Cerrar</button>
+    </div>
+    <div id="sheetBody"></div>
+  </dialog>
+
+  <script src="data.js"></script>
+  <script src="data-cities.js"></script>
+  <script src="data-world.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
