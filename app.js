@@ -971,7 +971,10 @@ function budgetFormHtml(base) {
       ${row("Otros gastos: eventos, museos… (€)", "other", `Pago único · ${sub("other")}`)}
       <div class="bud-total">
         <span>Total ${esc(base.name)}: <strong data-sub="total">${eur(t.total)}</strong></span>
-        <button class="small primary" type="submit">Guardar</button>
+        <div class="bud-actions">
+          <button class="small danger" type="button" data-budget-reset>Borrar valores</button>
+          <button class="small primary" type="submit">Guardar</button>
+        </div>
       </div>
     </form>`;
 }
@@ -1123,7 +1126,12 @@ sheetBody.addEventListener("click", (e) => {
   const base = state.bases.find((b) => b.id === openBaseId);
   if (!btn || !base) return;
 
-  if (btn.dataset.sheetTab) {
+  if (btn.dataset.budgetReset !== undefined) {
+    if (!confirm(`¿Borrar todos los importes del presupuesto de «${base.name}»?`)) return;
+    base.budget = { flight: null, perNight: null, perDay: null, perDestTrip: null, other: null };
+    save();
+    renderAll();
+  } else if (btn.dataset.sheetTab) {
     // Cambiar de pestaña sin volver a dibujar la ficha, para no perder lo que se esté escribiendo
     sheetTab = btn.dataset.sheetTab;
     sheetBody.querySelectorAll("[data-sheet-tab]").forEach((b) => b.classList.toggle("active", b.dataset.sheetTab === sheetTab));
