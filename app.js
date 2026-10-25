@@ -59,7 +59,7 @@ if (loadError && savedAtStart) {
 }
 let climateStore = loadClimate();
 let openBaseId = null;
-let sheetTab = "ficha";
+let sheetTab = "clima";
 let view = { ...WORLD_VIEW };
 let basePicker = null;
 let destPicker = null;
@@ -855,7 +855,7 @@ function showView(name) {
 
 // ---------- Ficha de ciudad base ----------
 
-function openSheet(id, tab = "ficha") {
+function openSheet(id, tab = "clima") {
   openBaseId = id;
   sheetTab = tab;
   renderSheet();
@@ -896,24 +896,23 @@ function renderSheet() {
     </form>
 
     <nav class="tabs sheet-tabs">
-      <button type="button" class="${tabClass("ficha")}" data-sheet-tab="ficha">Ficha</button>
-      <button type="button" class="${tabClass("budget")}" data-sheet-tab="budget">Presupuesto</button>
+      <button type="button" class="${tabClass("clima")}" data-sheet-tab="clima">Clima</button>
+      <button type="button" class="${tabClass("destinos")}" data-sheet-tab="destinos">Destinos</button>
+      <button type="button" class="${tabClass("presupuesto")}" data-sheet-tab="presupuesto">Presupuesto</button>
     </nav>
 
-    <div data-panel="budget" ${panel("budget")}>
-      ${budgetFormHtml(base)}
+    <div data-panel="clima" ${panel("clima")}>
+      <h3>Clima</h3>
+      <div id="sheetClimate"></div>
+
+      <h3>Riesgos climáticos</h3>
+      <div id="sheetRisks"></div>
+
+      <h3>Requisitos de entrada (ciudadano español)</h3>
+      ${requisitosHtml(base)}
     </div>
 
-    <div data-panel="ficha" ${panel("ficha")}>
-    <h3>Clima</h3>
-    <div id="sheetClimate"></div>
-
-    <h3>Riesgos climáticos</h3>
-    <div id="sheetRisks"></div>
-
-    <h3>Requisitos de entrada (ciudadano español)</h3>
-    ${requisitosHtml(base)}
-
+    <div data-panel="destinos" ${panel("destinos")}>
     <h3>Destinos (${base.destinations.length})</h3>
     <ul class="list">
       ${base.destinations.map((d) => destHtml(d, others)).join("") || '<li class="meta">Aún no hay destinos.</li>'}
@@ -936,6 +935,10 @@ function renderSheet() {
       </label>
       <button class="primary" type="submit">+ Añadir destino</button>
     </form>
+    </div>
+
+    <div data-panel="presupuesto" ${panel("presupuesto")}>
+      ${budgetFormHtml(base)}
     </div>
   `;
 
@@ -1155,7 +1158,7 @@ $("#budgetBody").addEventListener("click", (e) => {
   const row = e.target.closest("[data-base-id]");
   if (!row) return;
   budgetDialog.close();
-  openSheet(row.dataset.baseId, "budget");
+  openSheet(row.dataset.baseId, "presupuesto");
 });
 
 // ---------- Cabecera, barra inferior y diálogo de nueva base ----------
