@@ -887,15 +887,14 @@ function renderSheet() {
   sheetBody.innerHTML = `
     <div class="sheet-head">
       <h2>${esc(base.name)}</h2>
-      <button type="button" class="small danger" data-del>Eliminar</button>
+      <form id="baseEdit" class="days-form">
+        <label>Días/noches
+          <input name="days" type="number" inputmode="numeric" min="1" value="${base.days}" required>
+        </label>
+        <button class="small primary" type="submit">Guardar</button>
+      </form>
     </div>
     <p class="meta">Días ${from}–${to}${range}</p>
-    <form id="baseEdit" class="stack">
-      <label>Días / noches
-        <input name="days" type="number" inputmode="numeric" min="1" value="${base.days}" required>
-      </label>
-      <button class="primary" type="submit">Guardar cambios</button>
-    </form>
 
     <nav class="tabs sheet-tabs">
       <button type="button" class="${tabClass("clima")}" data-sheet-tab="clima">Clima</button>
@@ -1143,13 +1142,6 @@ sheetBody.addEventListener("click", (e) => {
     sheetTab = btn.dataset.sheetTab;
     sheetBody.querySelectorAll("[data-sheet-tab]").forEach((b) => b.classList.toggle("active", b.dataset.sheetTab === sheetTab));
     sheetBody.querySelectorAll("[data-panel]").forEach((p) => { p.hidden = p.dataset.panel !== sheetTab; });
-  } else if ("del" in btn.dataset) {
-    if (!confirm(`¿Eliminar «${base.name}» y sus destinos?`)) return;
-    state.bases = state.bases.filter((b) => b.id !== base.id);
-    openBaseId = null;
-    sheet.close();
-    save();
-    renderAll();
   } else if (btn.dataset.destDel !== undefined) {
     base.destinations = base.destinations.filter((d) => d.id !== btn.dataset.destDel);
     save();
@@ -1182,6 +1174,16 @@ sheetBody.addEventListener("input", (e) => {
 });
 
 $("#closeSheet").addEventListener("click", () => sheet.close());
+
+$("#deleteBase").addEventListener("click", () => {
+  const base = state.bases.find((b) => b.id === openBaseId);
+  if (!base || !confirm(`¿Eliminar «${base.name}» y sus destinos?`)) return;
+  state.bases = state.bases.filter((b) => b.id !== base.id);
+  openBaseId = null;
+  sheet.close();
+  save();
+  renderAll();
+});
 
 $("#closeBudget").addEventListener("click", () => budgetDialog.close());
 
