@@ -452,7 +452,11 @@ function renderSummary() {
     : diff > 0 ? `Faltan ${diff} días por asignar` : `Te pasas ${-diff} días`;
   let dates = "Elige la fecha de inicio";
   if (state.startDate && assigned > 0) dates = `${fmt(dayToDate(1))} → ${fmt(dayToDate(assigned))}`;
-  summaryEl.innerHTML = `<div><strong>${assigned} / ${TOTAL_DAYS}</strong> días · ${balance}</div><div class="meta">${dates}</div>`;
+  const destinations = state.bases.reduce((s, b) => s + b.destinations.length, 0);
+  summaryEl.innerHTML = `
+    <div><strong>${assigned} / ${TOTAL_DAYS}</strong> días · ${balance}</div>
+    <div class="meta">${dates}</div>
+    <div class="meta">Guardado en este dispositivo: ${state.bases.length} bases · ${destinations} destinos</div>`;
 }
 
 // Línea de la estación y la temperatura del mes dominante de la base
@@ -1001,7 +1005,36 @@ $("#baseForm").addEventListener("submit", (e) => {
   baseDialog.close();
 });
 
+// ---------- Copia de seguridad ----------
+
+$("#exportBtn").addEventListener("click", () => {
+  const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const name = `300dOnEarth-${new Date().toISOString().slice(0, 10)}.json`;
+  Object.assign(document.createElement("a"), { href: url, download: name }).click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+});
+
+$("#importFile").addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  e.target.value = "";
+  if (!file) return;
+  try {
+    const data = JSON.parse(await file.text());
+    if (!Array.isArray(data?.bases)) throw new Error("formato no válido");
+    if (state.bases.length && !confirm("Esto reemplazará la planificación actual por la del archivo. ¿Continuar?")) return;
+    state = normalizeState(data);
+    save();
+    renderAll();
+  } catch {
+    alert("El archivo no es válido.");
+  }
+});
+
 // ---------- Arranque ----------
+
+// Pide al navegador que no borre estos datos si le falta espacio
+navigator.storage?.persist?.();
 
 // Contornos del mundo: se definen una vez y se repiten a izquierda y derecha para que el recorrido cruce el antimeridiano.
 mapSvg.querySelector("defs").innerHTML = `<path id="worldShape" d="${WORLD_PATH_D}"></path>`;
