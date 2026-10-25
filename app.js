@@ -18,6 +18,7 @@ const timelineEl = $("#timeline");
 const baseDialog = $("#baseDialog");
 const sheet = $("#sheet");
 const sheetBody = $("#sheetBody");
+const budgetDialog = $("#budgetDialog");
 const mapSvg = $("#mapSvg");
 const mapRoute = $("#mapRoute");
 const mapSpokes = $("#mapSpokes");
@@ -58,6 +59,7 @@ if (loadError && savedAtStart) {
 }
 let climateStore = loadClimate();
 let openBaseId = null;
+let sheetTab = "ficha";
 let view = { ...WORLD_VIEW };
 let basePicker = null;
 let destPicker = null;
@@ -89,6 +91,13 @@ function normalizeState(raw) {
         lat: num(b.lat),
         lng: num(b.lng),
         days: b.days,
+        nights: num(b.nights),
+        budget: {
+          flight: num(b.budget?.flight),
+          perNight: num(b.budget?.perNight),
+          perDay: num(b.budget?.perDay),
+          perDestTrip: num(b.budget?.perDestTrip),
+        },
         destinations: (Array.isArray(b.destinations) ? b.destinations : [])
           .filter((d) => d && typeof d.name === "string")
           .map((d) => ({
@@ -343,6 +352,38 @@ function alertsFor(base, from, to) {
   return alerts;
 }
 
+// ---------- Presupuesto ----------
+
+const eur = (n) => n.toLocaleString("es-ES", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
+
+// Noches de la base: por defecto, una por cada día
+const nightsOf = (base) => base.nights ?? base.days;
+
+// Partidas del presupuesto de una base en euros (lo que no está rellenado cuenta como 0)
+function budgetOf(base) {
+  const b = base.budget;
+  const flight = b.flight ?? 0;
+  const lodging = (b.perNight ?? 0) * nightsOf(base);
+  const daily = (b.perDay ?? 0) * base.days;
+  const destTrips = (b.perDestTrip ?? 0) * base.destinations.length;
+  return {
+    flight,
+    lodging,
+    daily,
+    destTrips,
+    total: flight + lodging + daily + destTrips,
+    filled: Object.values(b).some((v) => v != null),
+  };
+}
+
+function readBudget(f) {
+  const amount = (v) => {
+    const n = toNum(v);
+    return Number.isFinite(n) && n >= 0 ? n : null;
+  };
+  return { flight: amount(f.flight), perNight: amount(f.perNight), perDay: amount(f.perDay), perDestTrip: amount(f.perDestTrip) };
+}
+
 // ---------- Buscador de ciudades (catálogo offline + Internet si hay conexión) ----------
 
 function cityPicker(placeholder, onChange = () => {}) {
@@ -491,10 +532,40 @@ function renderSummary() {
   const storage = storageOk
     ? `<div class="meta">Guardado en este dispositivo: ${state.bases.length} bases · ${destinations} destinos</div>`
     : `<div class="warn">⚠ Este navegador no deja guardar datos: se perderán al cerrar la app. Usa Exportar antes de salir.</div>`;
+  const budgets = state.bases.map(budgetOf);
+  const total = budgets.reduce((s, b) => s + b.total, 0);
+  const budgetText = budgets.some((b) => b.filled) ? `<strong>${eur(total)}</strong>` : '<span class="meta">sin rellenar</span>';
   summaryEl.innerHTML = `
     <div><strong>${assigned} / ${TOTAL_DAYS}</strong> días · ${balance}</div>
     <div class="meta">${dates}</div>
-    ${storage}`;
+    ${storage}
+    <button type="button" class="budget-link" id="budgetBtn"><span>Presupuesto total</span><span>${budgetText} ›</span></button>`;
+}
+
+summaryEl.addEventListener("click", (e) => {
+  if (e.target.closest("#budgetBtn")) openBudget();
+});
+
+function openBudget() {
+  const sum = (key) => state.bases.reduce((s, b) => s + budgetOf(b)[key], 0);
+  const rows = state.bases.map((b, i) => {
+    const t = budgetOf(b);
+    return `
+      <li><button type="button" class="budget-row" data-base-id="${b.id}">
+        <span><span class="num">${i + 1}</span> ${esc(b.name)}</span>
+        <span>${t.filled ? `<strong>${eur(t.total)}</strong>` : '<span class="meta">sin rellenar</span>'} ›</span>
+      </button></li>`;
+  }).join("");
+  $("#budgetBody").innerHTML = `
+    <div class="budget-line"><span>Vuelos principales</span><strong>${eur(sum("flight"))}</strong></div>
+    <div class="budget-line"><span>Alojamiento</span><strong>${eur(sum("lodging"))}</strong></div>
+    <div class="budget-line"><span>Gastos diarios</span><strong>${eur(sum("daily"))}</strong></div>
+    <div class="budget-line"><span>Viajes a destinos</span><strong>${eur(sum("destTrips"))}</strong></div>
+    <div class="budget-line total"><span>Total</span><strong>${eur(sum("total"))}</strong></div>
+    <h3>Por ciudad base</h3>
+    <ul class="list">${rows || '<li class="meta">Aún no hay ciudades base.</li>'}</ul>
+    <p class="meta">Toca una ciudad para rellenar su presupuesto.</p>`;
+  if (!budgetDialog.open) budgetDialog.showModal();
 }
 
 // Línea de la estación y la temperatura del mes dominante de la base
@@ -771,12 +842,12 @@ $("#worldBtn").addEventListener("click", () => setView({ ...WORLD_VIEW }));
 $("#zoomIn").addEventListener("click", () => zoomBy(1 / 1.5));
 $("#zoomOut").addEventListener("click", () => zoomBy(1.5));
 
-document.querySelectorAll(".tab").forEach((btn) => {
+document.querySelectorAll("[data-view]").forEach((btn) => {
   btn.addEventListener("click", () => showView(btn.dataset.view));
 });
 
 function showView(name) {
-  document.querySelectorAll(".tab").forEach((b) => b.classList.toggle("active", b.dataset.view === name));
+  document.querySelectorAll("[data-view]").forEach((b) => b.classList.toggle("active", b.dataset.view === name));
   $("#view-timeline").hidden = name !== "timeline";
   $("#view-map").hidden = name !== "map";
   if (name === "map") fitRoute();
@@ -784,8 +855,9 @@ function showView(name) {
 
 // ---------- Ficha de ciudad base ----------
 
-function openSheet(id) {
+function openSheet(id, tab = "ficha") {
   openBaseId = id;
+  sheetTab = tab;
   renderSheet();
   if (!sheet.open) sheet.showModal();
 }
@@ -802,20 +874,37 @@ function renderSheet() {
 
   destPicker = cityPicker("Buscar destino (ciudad o lugar)…", refreshManualFields);
 
+  const panel = (name) => (sheetTab === name ? "" : "hidden");
+  const tabClass = (name) => (sheetTab === name ? "tab active" : "tab");
+
   sheetBody.innerHTML = `
-    <h2>${esc(base.name)}</h2>
+    <div class="sheet-head">
+      <h2>${esc(base.name)}</h2>
+      <button type="button" class="small danger" data-del>Eliminar</button>
+    </div>
+    <p class="meta">Días ${from}–${to}${range}</p>
     <form id="baseEdit" class="stack">
-      <label>Días
-        <input name="days" type="number" inputmode="numeric" min="1" value="${base.days}" required>
-      </label>
+      <div class="row2">
+        <label>Días
+          <input name="days" type="number" inputmode="numeric" min="1" value="${base.days}" required>
+        </label>
+        <label>Noches
+          <input name="nights" type="number" inputmode="numeric" min="0" value="${nightsOf(base)}" required>
+        </label>
+      </div>
       <button class="primary" type="submit">Guardar cambios</button>
     </form>
-    <p class="meta">Días ${from}–${to}${range}</p>
-    <div class="row">
-      <button type="button" data-move="-1">↑ Subir</button>
-      <button type="button" data-move="1">↓ Bajar</button>
-      <button type="button" class="danger" data-del>Eliminar</button>
+
+    <nav class="tabs sheet-tabs">
+      <button type="button" class="${tabClass("ficha")}" data-sheet-tab="ficha">Ficha</button>
+      <button type="button" class="${tabClass("budget")}" data-sheet-tab="budget">Presupuesto</button>
+    </nav>
+
+    <div data-panel="budget" ${panel("budget")}>
+      ${budgetFormHtml(base)}
     </div>
+
+    <div data-panel="ficha" ${panel("ficha")}>
     <h3>Clima</h3>
     <div id="sheetClimate"></div>
 
@@ -847,10 +936,46 @@ function renderSheet() {
       </label>
       <button class="primary" type="submit">+ Añadir destino</button>
     </form>
+    </div>
   `;
 
   sheetBody.querySelector('[data-picker="dest"]').append(destPicker.el);
   fillClimateSections();
+}
+
+function budgetFormHtml(base) {
+  const b = base.budget;
+  const t = budgetOf(base);
+  const value = (v) => (v == null ? "" : v);
+  const input = (name) =>
+    `<input name="${name}" type="number" inputmode="decimal" min="0" step="any" placeholder="0" value="${value(b[name])}">`;
+  return `
+    <form id="budgetForm" class="stack">
+      <p class="meta">Todo es opcional: rellénalo cuando tengas datos. Importes en euros.</p>
+
+      <label>Vuelo principal para llegar a ${esc(base.name)}
+        ${input("flight")}
+      </label>
+      <div class="budget-line"><span>Vuelo principal</span><strong data-sub="flight">${eur(t.flight)}</strong></div>
+
+      <label>Alojamiento: precio por noche
+        ${input("perNight")}
+      </label>
+      <div class="budget-line"><span>× ${nightsOf(base)} noches</span><strong data-sub="lodging">${eur(t.lodging)}</strong></div>
+
+      <label>Coste medio por día (comida, transporte, actividades)
+        ${input("perDay")}
+      </label>
+      <div class="budget-line"><span>× ${base.days} días</span><strong data-sub="daily">${eur(t.daily)}</strong></div>
+
+      <label>Precio medio de un viaje a un destino
+        ${input("perDestTrip")}
+      </label>
+      <div class="budget-line"><span>× ${base.destinations.length} destinos</span><strong data-sub="destTrips">${eur(t.destTrips)}</strong></div>
+
+      <div class="budget-line total"><span>Total ${esc(base.name)}</span><strong data-sub="total">${eur(t.total)}</strong></div>
+      <button class="primary" type="submit">Guardar presupuesto</button>
+    </form>`;
 }
 
 // Muestra km y horas a mano solo si la distancia no se puede calcular (falta alguna coordenada)
@@ -938,15 +1063,6 @@ function destHtml(d, others) {
     </li>`;
 }
 
-function moveBase(id, dir) {
-  const i = state.bases.findIndex((b) => b.id === id);
-  const j = i + dir;
-  if (j < 0 || j >= state.bases.length) return;
-  [state.bases[i], state.bases[j]] = [state.bases[j], state.bases[i]];
-  save();
-  renderAll();
-}
-
 sheetBody.addEventListener("submit", (e) => {
   e.preventDefault();
   const base = state.bases.find((b) => b.id === openBaseId);
@@ -955,8 +1071,16 @@ sheetBody.addEventListener("submit", (e) => {
 
   if (e.target.id === "baseEdit") {
     const days = Number(f.days);
-    if (!Number.isInteger(days) || days < 1) return alert("Revisa los días.");
+    const nights = Number(f.nights);
+    if (!Number.isInteger(days) || days < 1 || !Number.isInteger(nights) || nights < 0) {
+      return alert("Revisa los días y las noches.");
+    }
+    // Las noches siguen a los días mientras no se cambien a mano
+    const untouched = base.nights == null && nights === nightsOf(base);
+    base.nights = untouched || nights === days ? null : nights;
     base.days = days;
+  } else if (e.target.id === "budgetForm") {
+    base.budget = readBudget(f);
   } else if (e.target.id === "destForm") {
     const p = destPicker.value();
     if (!p) return;
@@ -980,8 +1104,11 @@ sheetBody.addEventListener("click", (e) => {
   const base = state.bases.find((b) => b.id === openBaseId);
   if (!btn || !base) return;
 
-  if (btn.dataset.move !== undefined) {
-    moveBase(base.id, Number(btn.dataset.move));
+  if (btn.dataset.sheetTab) {
+    // Cambiar de pestaña sin volver a dibujar la ficha, para no perder lo que se esté escribiendo
+    sheetTab = btn.dataset.sheetTab;
+    sheetBody.querySelectorAll("[data-sheet-tab]").forEach((b) => b.classList.toggle("active", b.dataset.sheetTab === sheetTab));
+    sheetBody.querySelectorAll("[data-panel]").forEach((p) => { p.hidden = p.dataset.panel !== sheetTab; });
   } else if ("del" in btn.dataset) {
     if (!confirm(`¿Eliminar «${base.name}» y sus destinos?`)) return;
     state.bases = state.bases.filter((b) => b.id !== base.id);
@@ -1009,7 +1136,27 @@ sheetBody.addEventListener("change", (e) => {
   renderAll();
 });
 
+// Subtotales del presupuesto actualizados mientras se escribe
+sheetBody.addEventListener("input", (e) => {
+  const form = e.target.closest("#budgetForm");
+  const base = state.bases.find((b) => b.id === openBaseId);
+  if (!form || !base) return;
+  const preview = budgetOf({ ...base, budget: readBudget(Object.fromEntries(new FormData(form))) });
+  form.querySelectorAll("[data-sub]").forEach((el) => {
+    el.textContent = eur(preview[el.dataset.sub]);
+  });
+});
+
 $("#closeSheet").addEventListener("click", () => sheet.close());
+
+$("#closeBudget").addEventListener("click", () => budgetDialog.close());
+
+$("#budgetBody").addEventListener("click", (e) => {
+  const row = e.target.closest("[data-base-id]");
+  if (!row) return;
+  budgetDialog.close();
+  openSheet(row.dataset.baseId, "budget");
+});
 
 // ---------- Cabecera, barra inferior y diálogo de nueva base ----------
 
@@ -1037,7 +1184,18 @@ $("#baseForm").addEventListener("submit", (e) => {
   const p = basePicker.value();
   const days = Number(f.days);
   if (!p || !Number.isInteger(days) || days < 1) return;
-  state.bases.push({ id: uid(), name: p.name, country: p.country, iso2: p.iso2, lat: p.lat, lng: p.lng, days, destinations: [] });
+  state.bases.push({
+    id: uid(),
+    name: p.name,
+    country: p.country,
+    iso2: p.iso2,
+    lat: p.lat,
+    lng: p.lng,
+    days,
+    nights: null,
+    budget: { flight: null, perNight: null, perDay: null, perDestTrip: null },
+    destinations: [],
+  });
   save();
   renderAll();
   baseDialog.close();

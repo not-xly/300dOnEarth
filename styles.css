@@ -164,7 +164,8 @@ dialog {
 }
 dialog::backdrop { background: rgba(0, 0, 0, 0.4); }
 
-#sheet {
+#sheet,
+#budgetDialog {
   width: 100vw;
   max-width: 100vw;
   height: 100dvh;
@@ -174,8 +175,8 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.4); }
   padding: calc(12px + env(safe-area-inset-top)) 16px calc(24px + env(safe-area-inset-bottom));
   overflow-y: auto;
 }
-#sheet h2 { margin: 4px 0 0; font-size: 20px; }
-#sheet h3 { margin: 18px 0 8px; font-size: 16px; }
+#sheet h2, #budgetDialog h2 { margin: 4px 0 0; font-size: 20px; }
+#sheet h3, #budgetDialog h3 { margin: 18px 0 8px; font-size: 16px; }
 
 #baseForm { display: flex; flex-direction: column; gap: 12px; }
 #baseForm h2 { margin: 0; font-size: 18px; }
@@ -347,3 +348,49 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.4); }
 }
 
 .warn { color: var(--alto); font-weight: 600; font-size: 13px; margin-top: 4px; }
+
+/* Cabecera de la ficha y presupuesto */
+.sheet-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.sheet-head h2 { flex: 1; min-width: 0; }
+.sheet-tabs { margin: 16px -16px 8px; }
+
+.budget-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid #eef2f5;
+  font-size: 14px;
+}
+.budget-line.total { font-size: 16px; border-bottom: none; border-top: 2px solid var(--line); margin-top: 4px; padding-top: 10px; }
+
+.budget-link {
+  width: 100%;
+  justify-content: space-between;
+  margin-top: 8px;
+  min-height: 40px;
+  font-size: 14px;
+}
+
+.budget-row {
+  width: 100%;
+  border: none;
+  border-radius: 0;
+  justify-content: space-between;
+  text-align: left;
+  font-size: 15px;
+  padding: 0;
+}
+.budget-row .num, .legend .num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  margin-right: 6px;
+}
