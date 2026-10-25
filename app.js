@@ -955,38 +955,24 @@ function budgetFormHtml(base) {
   const t = budgetOf(base);
   const value = (v) => (v == null ? "" : v);
   const input = (name) =>
-    `<input name="${name}" type="number" inputmode="decimal" min="0" step="any" placeholder="0" value="${value(b[name])}">`;
+    `<input name="${name}" type="number" inputmode="decimal" min="0" step="any" placeholder="0" value="${value(b[name])}" aria-label="${name}">`;
+  const row = (label, name, detail) => `
+    <div class="bud-row">
+      <div class="bud-text"><span>${label}</span><span class="meta">${detail}</span></div>
+      ${input(name)}
+    </div>`;
+  const sub = (key) => `<span data-sub="${key}">${eur(t[key])}</span>`;
   return `
-    <form id="budgetForm" class="stack">
-      <p class="meta">Todo es opcional: rellénalo cuando tengas datos. Importes en euros.</p>
-
-      <label>Vuelo principal para llegar a ${esc(base.name)}
-        ${input("flight")}
-      </label>
-      <div class="budget-line"><span>Vuelo principal</span><strong data-sub="flight">${eur(t.flight)}</strong></div>
-
-      <label>Alojamiento: precio por noche
-        ${input("perNight")}
-      </label>
-      <div class="budget-line"><span>× ${base.days} noches</span><strong data-sub="lodging">${eur(t.lodging)}</strong></div>
-
-      <label>Coste medio por día (comida, transporte, actividades)
-        ${input("perDay")}
-      </label>
-      <div class="budget-line"><span>× ${base.days} días</span><strong data-sub="daily">${eur(t.daily)}</strong></div>
-
-      <label>Precio medio de un viaje a un destino
-        ${input("perDestTrip")}
-      </label>
-      <div class="budget-line"><span>× ${base.destinations.length} destinos</span><strong data-sub="destTrips">${eur(t.destTrips)}</strong></div>
-
-      <label>Otros gastos (eventos musicales o deportivos, museos…)
-        ${input("other")}
-      </label>
-      <div class="budget-line"><span>Otros gastos</span><strong data-sub="other">${eur(t.other)}</strong></div>
-
-      <div class="budget-line total"><span>Total ${esc(base.name)}</span><strong data-sub="total">${eur(t.total)}</strong></div>
-      <button class="primary" type="submit">Guardar presupuesto</button>
+    <form id="budgetForm" class="bud-form">
+      ${row("Vuelo principal para llegar (€)", "flight", `Pago único · ${sub("flight")}`)}
+      ${row("Alojamiento: precio por noche (€)", "perNight", `× ${base.days} noches = ${sub("lodging")}`)}
+      ${row("Gastos diarios: comida, transporte… (€)", "perDay", `× ${base.days} días = ${sub("daily")}`)}
+      ${row("Viaje medio a cada destino (€)", "perDestTrip", `× ${base.destinations.length} destinos = ${sub("destTrips")}`)}
+      ${row("Otros gastos: eventos, museos… (€)", "other", `Pago único · ${sub("other")}`)}
+      <div class="bud-total">
+        <span>Total ${esc(base.name)}: <strong data-sub="total">${eur(t.total)}</strong></span>
+        <button class="small primary" type="submit">Guardar</button>
+      </div>
     </form>`;
 }
 
