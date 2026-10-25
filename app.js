@@ -46,6 +46,12 @@ const savedAtStart = (() => {
 })();
 
 let state = load();
+// Si los datos existían pero no se pudieron leer, se guarda una copia antes de que cualquier cambio la sobrescriba
+if (loadError && savedAtStart) {
+  try {
+    localStorage.setItem(STORAGE_KEY + ":copia", savedAtStart);
+  } catch {}
+}
 let climateStore = loadClimate();
 let openBaseId = null;
 let view = { ...WORLD_VIEW };
@@ -95,10 +101,13 @@ function normalizeState(raw) {
   };
 }
 
+let loadError = null;
+
 function load() {
   try {
     return normalizeState(JSON.parse(localStorage.getItem(STORAGE_KEY)));
-  } catch {
+  } catch (e) {
+    loadError = `${e.name}: ${e.message}`;
     return normalizeState({});
   }
 }
@@ -485,7 +494,7 @@ function renderSummary() {
     <div><strong>${assigned} / ${TOTAL_DAYS}</strong> días · ${balance}</div>
     <div class="meta">${dates}</div>
     ${storage}
-    <div class="meta">Diagnóstico al abrir: ${savedAtStart ? `había datos guardados (${savedAtStart.length} caracteres)` : "no había datos guardados"}</div>`;
+    <div class="meta">Diagnóstico al abrir: ${savedAtStart ? `había datos guardados (${savedAtStart.length} caracteres)` : "no había datos guardados"}${loadError ? ` · error al leer: ${esc(loadError)}` : ""}</div>`;
 }
 
 // Línea de la estación y la temperatura del mes dominante de la base
