@@ -1,8 +1,10 @@
 const STORAGE_KEY = "300dOnEarth:v1";
+const CLIMATE_KEY = "300dOnEarth:clima";
 const TOTAL_DAYS = 300;
 const EARTH_KM = 6371;
 const MONTHS = ["enero", "febrero", "marzo", "abril", "mayo", "junio", "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre"];
-const LEVEL_LABEL = { alto: "Alto", medio: "Medio", bajo: "Bajo" };
+const ND = "No conocido por el momento";
+const LEVEL_LABEL = { alto: "Alto", medio: "Medio", bajo: "Bajo", nd: "No conocido" };
 // Nombres en español para entradas del catálogo, por código de país ISO2 y nombre original.
 const ES_NAMES = { "GT|Guatemala": "Ciudad de Guatemala", "US|Los Angeles": "Los Ángeles", "MX|Cancun": "Cancún" };
 const WORLD_VIEW = { x: 0, y: 0, w: 360, h: 180 };
@@ -23,6 +25,7 @@ const mapLegend = $("#mapLegend");
 const mapStats = $("#mapStats");
 
 let state = load();
+let climateStore = loadClimate();
 let openBaseId = null;
 let view = { ...WORLD_VIEW };
 let basePicker = null;
@@ -37,6 +40,12 @@ function uid() {
 
 const num = (v) => (typeof v === "number" && Number.isFinite(v) ? v : null);
 
+// Para bases guardadas antes de tener código de país: se deduce del catálogo por nombre.
+function guessIso2(name) {
+  const hit = CITIES.find((c) => norm(displayName(c)) === norm(name));
+  return hit ? hit[2] : null;
+}
+
 function normalizeState(raw) {
   const bases = Array.isArray(raw?.bases) ? raw.bases : [];
   return {
@@ -47,6 +56,7 @@ function normalizeState(raw) {
         id: b.id || uid(),
         name: b.name,
         country: typeof b.country === "string" ? b.country : null,
+        iso2: typeof b.iso2 === "string" ? b.iso2 : guessIso2(b.name),
         lat: num(b.lat),
         lng: num(b.lng),
         days: b.days,
@@ -77,6 +87,18 @@ function save() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
 
+function loadClimate() {
+  try {
+    return JSON.parse(localStorage.getItem(CLIMATE_KEY)) || {};
+  } catch {
+    return {};
+  }
+}
+
+function saveClimate() {
+  localStorage.setItem(CLIMATE_KEY, JSON.stringify(climateStore));
+}
+
 // ---------- Utilidades ----------
 
 function esc(s) {
@@ -85,6 +107,10 @@ function esc(s) {
 
 function cap(s) {
   return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+function fmt1(n) {
+  return n == null ? "—" : n.toFixed(1).replace(".", ",");
 }
 
 function toNum(v) {
@@ -98,10 +124,6 @@ function norm(s) {
 // Nombre a mostrar para una fila del catálogo [nombre, país, ISO2, lat, lng, población].
 function displayName(row) {
   return ES_NAMES[row[2] + "|" + row[0]] || row[0];
-}
-
-function climateOf(name) {
-  return CLIMATE[norm(name)] || null;
 }
 
 // Distancia en línea recta entre dos coordenadas (km).
@@ -150,18 +172,140 @@ function monthBreakdown(from, to) {
   return [...map.values()];
 }
 
-// Riesgos de nivel alto que coinciden con los meses del tramo.
-function highRisks(name, from, to) {
-  const climate = climateOf(name);
+// Mes del calendario en el que más días cae el tramo.
+function dominantMonth(from, to) {
   const months = monthBreakdown(from, to);
-  if (!climate || !months) return [];
-  const found = new Set();
-  months.forEach((m) => {
-    climate.risks
-      .filter((r) => r.level === "alto" && r.months.includes(m.month + 1))
-      .forEach((r) => found.add(r.name));
+  if (!months) return null;
+  return months.reduce((best, m) => (m.days > best.days ? m : best), months[0]);
+}
+
+// ---------- Clima ----------
+
+const climateKeyOf = (lat, lng) => `${lat.toFixed(2)},${lng.toFixed(2)}`;
+
+function climateFor(base) {
+  if (base.lat == null || base.lng == null) return null;
+  return climateStore[climateKeyOf(base.lat, base.lng)] || null;
+}
+
+// Media mensual de los últimos 10 años a partir de datos diarios de Open-Meteo (archivo histórico).
+function monthlyStats(daily) {
+  const acc = Array.from({ length: 12 }, () => ({ t: [], p: 0, rain: 0, hot: 0, cold: 0 }));
+  daily.time.forEach((date, i) => {
+    const a = acc[Number(date.slice(5, 7)) - 1];
+    const tmean = daily.temperature_2m_mean[i];
+    const precip = daily.precipitation_sum[i] ?? 0;
+    if (tmean != null) a.t.push(tmean);
+    a.p += precip;
+    if (precip >= 30) a.rain++;
+    if ((daily.temperature_2m_max[i] ?? -Infinity) >= 35) a.hot++;
+    if ((daily.temperature_2m_min[i] ?? Infinity) <= -10) a.cold++;
   });
-  return [...found];
+  const years = new Set(daily.time.map((d) => d.slice(0, 4))).size;
+  const mean = (arr) => (arr.length ? arr.reduce((s, v) => s + v, 0) / arr.length : null);
+  return {
+    years,
+    months: acc.map((a) => ({
+      t: mean(a.t),
+      p: a.p / years,
+      rain: a.rain / years,
+      hot: a.hot / years,
+      cold: a.cold / years,
+    })),
+  };
+}
+
+async function fetchClimate(lat, lng) {
+  const url = "https://archive-api.open-meteo.com/v1/archive?" + new URLSearchParams({
+    latitude: lat,
+    longitude: lng,
+    start_date: "2016-01-01",
+    end_date: "2025-12-31",
+    daily: "temperature_2m_mean,temperature_2m_max,temperature_2m_min,precipitation_sum",
+    timezone: "auto",
+  });
+  const res = await fetch(url);
+  if (!res.ok) throw new Error("clima no disponible");
+  return monthlyStats((await res.json()).daily);
+}
+
+const climatePending = new Set();
+const climateFailed = new Set();
+
+// Descarga el clima de las bases que aún no lo tienen, de una en una, cuando hay conexión.
+function ensureClimate() {
+  if (!navigator.onLine) return;
+  const todo = state.bases.filter((b) => {
+    if (b.lat == null) return false;
+    const key = climateKeyOf(b.lat, b.lng);
+    return !climateStore[key] && !climateFailed.has(key) && !climatePending.has(key);
+  });
+  if (!todo.length) return;
+  todo.forEach((b) => climatePending.add(climateKeyOf(b.lat, b.lng)));
+
+  (async () => {
+    for (const b of todo) {
+      const key = climateKeyOf(b.lat, b.lng);
+      try {
+        climateStore[key] = await fetchClimate(b.lat, b.lng);
+        saveClimate();
+      } catch {
+        climateFailed.add(key);
+      }
+      climatePending.delete(key);
+      renderTimeline();
+      if (sheet.open) fillClimateSections();
+    }
+  })();
+}
+
+// Nivel de riesgo a partir de la media de días al mes que cumplen una condición.
+function levelFrom(v, medio, alto) {
+  return v >= alto ? "alto" : v >= medio ? "medio" : "bajo";
+}
+
+// Riesgos climáticos para los meses que ocupa la base, usando el peor mes del tramo.
+function riskItems(stats, months) {
+  const tornado = { name: "Tornados", level: "nd", detail: ND };
+  if (!stats || !months) {
+    return [
+      { name: "Lluvias intensas", level: "nd", detail: ND },
+      { name: "Calor extremo (más de 35 °C)", level: "nd", detail: ND },
+      { name: "Frío extremo (menos de −10 °C)", level: "nd", detail: ND },
+      tornado,
+    ];
+  }
+  const peak = (key) => months.reduce((best, m) => {
+    const v = stats.months[m.month][key];
+    return !best || v > best.v ? { v, month: m.month } : best;
+  }, null);
+  const rain = peak("rain");
+  const hot = peak("hot");
+  const cold = peak("cold");
+  const per = (v) => v.toFixed(1).replace(".", ",");
+  return [
+    { name: "Lluvias intensas", level: levelFrom(rain.v, 0.5, 2), detail: `${per(rain.v)} días al mes con más de 30 mm (pico en ${MONTHS[rain.month]})` },
+    { name: "Calor extremo (más de 35 °C)", level: levelFrom(hot.v, 1, 3), detail: `${per(hot.v)} días al mes (pico en ${MONTHS[hot.month]})` },
+    { name: "Frío extremo (menos de −10 °C)", level: levelFrom(cold.v, 1, 3), detail: `${per(cold.v)} días al mes (pico en ${MONTHS[cold.month]})` },
+    tornado,
+  ];
+}
+
+// Estación del año según el mes y el hemisferio (lat < 0 = hemisferio sur).
+function seasonOf(month, lat) {
+  if (lat == null) return "estación no conocida";
+  const north = ["invierno", "invierno", "primavera", "primavera", "primavera", "verano", "verano", "verano", "otoño", "otoño", "otoño", "invierno"];
+  return lat < 0 ? north[(month + 6) % 12] : north[month];
+}
+
+// Avisos que se muestran en la línea temporal: riesgos altos y estancia por encima del límite del país.
+function alertsFor(base, from, to) {
+  const alerts = riskItems(climateFor(base), monthBreakdown(from, to))
+    .filter((r) => r.level === "alto")
+    .map((r) => r.name);
+  const req = base.iso2 ? REQUISITOS[base.iso2] : null;
+  if (req?.maxDays && base.days > req.maxDays) alerts.push(`Estancia de ${base.days} días por encima del límite de ${req.maxDays}`);
+  return alerts;
 }
 
 // ---------- Buscador de ciudades (catálogo offline + Internet si hay conexión) ----------
@@ -197,17 +341,26 @@ function cityPicker(placeholder) {
       .filter((c) => norm(displayName(c)).includes(key))
       .sort((a, b) => Number(!norm(displayName(a)).startsWith(key)) - Number(!norm(displayName(b)).startsWith(key)))
       .slice(0, 8)
-      .map((c) => ({ name: displayName(c), country: c[1], detail: c[1], lat: c[3], lng: c[4] }));
+      .map((c) => ({ name: displayName(c), country: c[1], iso2: c[2], detail: c[1], lat: c[3], lng: c[4] }));
   }
 
   async function searchOnline() {
     status.textContent = "Buscando en Internet…";
     try {
-      const url = "https://nominatim.openstreetmap.org/search?format=json&limit=6&accept-language=es&q=" + encodeURIComponent(query);
+      const url = "https://nominatim.openstreetmap.org/search?" + new URLSearchParams({
+        format: "json", limit: 6, addressdetails: 1, "accept-language": "es", q: query,
+      });
       const data = await (await fetch(url)).json();
       const items = data.map((d) => {
         const parts = d.display_name.split(", ");
-        return { name: parts[0], country: parts[parts.length - 1], detail: parts.slice(1).join(", "), lat: Number(d.lat), lng: Number(d.lon) };
+        return {
+          name: parts[0],
+          country: parts[parts.length - 1],
+          iso2: d.address?.country_code?.toUpperCase() ?? null,
+          detail: parts.slice(1).join(", "),
+          lat: Number(d.lat),
+          lng: Number(d.lon),
+        };
       });
       status.textContent = items.length ? "" : "Sin resultados en Internet";
       showOptions(items, { online: false });
@@ -217,7 +370,7 @@ function cityPicker(placeholder) {
   }
 
   function pick(o) {
-    picked = { name: o.name, country: o.country ?? null, lat: o.lat ?? null, lng: o.lng ?? null };
+    picked = { name: o.name, country: o.country ?? null, iso2: o.iso2 ?? null, lat: o.lat ?? null, lng: o.lng ?? null };
     input.value = picked.name;
     list.hidden = true;
     status.textContent = picked.lat != null
@@ -247,7 +400,7 @@ function cityPicker(placeholder) {
     if (!btn) return;
     if (btn.dataset.online !== undefined) return searchOnline();
     if (btn.dataset.manual !== undefined) {
-      picked = { name: query, country: null, lat: null, lng: null };
+      picked = { name: query, country: null, iso2: null, lat: null, lng: null };
       input.value = query;
       list.hidden = true;
       status.textContent = "Sin coordenadas";
@@ -261,7 +414,7 @@ function cityPicker(placeholder) {
     value() {
       if (picked) return picked;
       const text = input.value.trim();
-      return text ? { name: text, country: null, lat: null, lng: null } : null;
+      return text ? { name: text, country: null, iso2: null, lat: null, lng: null } : null;
     },
     reset() {
       input.value = "";
@@ -285,6 +438,7 @@ function renderAll() {
   renderTimeline();
   renderMap();
   if (sheet.open) renderSheet();
+  ensureClimate();
 }
 
 function renderSummary() {
@@ -296,6 +450,17 @@ function renderSummary() {
   let dates = "Elige la fecha de inicio";
   if (state.startDate && assigned > 0) dates = `${fmt(dayToDate(1))} → ${fmt(dayToDate(assigned))}`;
   summaryEl.innerHTML = `<div><strong>${assigned} / ${TOTAL_DAYS}</strong> días · ${balance}</div><div class="meta">${dates}</div>`;
+}
+
+// Línea de la estación y la temperatura del mes dominante de la base
+function seasonLine(base, from, to) {
+  if (!state.startDate) return "Elige la fecha de inicio para ver la estación";
+  const dom = dominantMonth(from, to);
+  const stats = climateFor(base);
+  let temp = ND.toLowerCase();
+  if (stats) temp = `${fmt1(stats.months[dom.month].t)} °C`;
+  else if (base.lat != null && climatePending.has(climateKeyOf(base.lat, base.lng))) temp = "cargando clima…";
+  return `${cap(seasonOf(dom.month, base.lat))} · ${temp} (${MONTHS[dom.month]})`;
 }
 
 function renderTimeline() {
@@ -314,16 +479,17 @@ function renderTimeline() {
     block.style.flex = `${base.days} 1 0px`;
 
     const dates = state.startDate ? `${fmt(dayToDate(from))} → ${fmt(dayToDate(to))}` : "";
-    const alerts = highRisks(base.name, from, to);
+    const alerts = alertsFor(base, from, to);
     block.innerHTML = `
       <div class="handle" title="Arrastrar para reordenar">⋮⋮</div>
       <div class="info">
         <strong>${esc(base.name)}</strong>
         <span class="meta">${base.days} días · Días ${from}–${to} · ${Math.round((base.days / TOTAL_DAYS) * 100)}%</span>
         ${dates ? `<span class="meta">${dates}</span>` : ""}
-        <span class="meta">${base.destinations.length} destinos${base.lat == null ? " · sin coordenadas" : ""}</span>
+        <span class="season">${esc(seasonLine(base, from, to))}</span>
+        <span class="meta">${base.destinations.length} destinos</span>
       </div>
-      ${alerts.length ? `<span class="alert" title="${esc(alerts.join(", "))}">⚠ ${alerts.length}</span>` : ""}
+      ${alerts.length ? `<span class="alert" title="${esc(alerts.join(". "))}">⚠ ${alerts.length}</span>` : ""}
     `;
 
     const handle = block.querySelector(".handle");
@@ -560,11 +726,7 @@ function renderSheet() {
   }
   const { base, from, to } = item;
   const others = state.bases.filter((b) => b.id !== base.id);
-  const months = monthBreakdown(from, to);
   const range = state.startDate ? ` · ${fmt(dayToDate(from))} → ${fmt(dayToDate(to))}` : "";
-  const location = base.lat != null
-    ? `${esc(base.country || "")} · ${base.lat.toFixed(2)}, ${base.lng.toFixed(2)}`
-    : "Sin coordenadas: no aparece en el mapa ni se calculan distancias.";
 
   locPicker = cityPicker("Buscar otra ciudad…");
   destPicker = cityPicker("Buscar destino (ciudad o lugar)…");
@@ -588,16 +750,19 @@ function renderSheet() {
       <button type="button" data-move="1">↓ Bajar</button>
       <button type="button" class="danger" data-del>Eliminar</button>
     </div>
-
-    <h3>Ubicación</h3>
-    <p class="meta">${location}</p>
     <form id="locForm" class="stack">
       <div data-picker="loc"></div>
-      <button class="small" type="submit">Cambiar ubicación</button>
+      <button class="small" type="submit">Cambiar ciudad</button>
     </form>
 
-    <h3>Clima y riesgos</h3>
-    ${climateHtml(base, months)}
+    <h3>Clima</h3>
+    <div id="sheetClimate"></div>
+
+    <h3>Riesgos climáticos</h3>
+    <div id="sheetRisks"></div>
+
+    <h3>Requisitos de entrada (ciudadano español)</h3>
+    ${requisitosHtml(base)}
 
     <h3>Destinos (${base.destinations.length})</h3>
     <ul class="list">
@@ -623,35 +788,69 @@ function renderSheet() {
 
   sheetBody.querySelector('[data-picker="loc"]').append(locPicker.el);
   sheetBody.querySelector('[data-picker="dest"]').append(destPicker.el);
+  fillClimateSections();
 }
 
-function climateHtml(base, months) {
-  if (!state.startDate) {
-    return '<p class="meta">Elige la fecha de inicio arriba para ver el clima de cada mes de esta base.</p>';
+// Solo actualiza las secciones de clima y riesgos, para no perder lo que se esté escribiendo en la ficha
+function fillClimateSections() {
+  const item = layout().find((x) => x.base.id === openBaseId);
+  if (!item) return;
+  const { base, from, to } = item;
+  const climateBox = sheetBody.querySelector("#sheetClimate");
+  const risksBox = sheetBody.querySelector("#sheetRisks");
+  if (!climateBox || !risksBox) return;
+  climateBox.innerHTML = climateHtml(base, from, to);
+  risksBox.innerHTML = risksHtml(base, from, to);
+}
+
+function climateHtml(base, from, to) {
+  if (!state.startDate) return '<p class="meta">Elige la fecha de inicio arriba para ver el clima de cada mes de esta base.</p>';
+  const stats = climateFor(base);
+  if (!stats) {
+    const pending = base.lat != null && climatePending.has(climateKeyOf(base.lat, base.lng));
+    const text = pending ? "Cargando clima…" : `${ND}. Se cargará cuando haya conexión.`;
+    return `<p class="meta">${text}</p>`;
   }
-  const climate = climateOf(base.name);
-  if (!climate) {
-    return `<p class="meta">Sin datos climáticos todavía para «${esc(base.name)}». Se añadirán más adelante.</p>`;
-  }
+  const months = monthBreakdown(from, to);
   const total = months.reduce((s, m) => s + m.days, 0);
-  const avg = months.reduce((s, m) => s + climate.temp[m.month] * m.days, 0) / total;
+  const avg = months.reduce((s, m) => s + stats.months[m.month].t * m.days, 0) / total;
+  const rows = months.map((m) => `
+    <div class="month-row">
+      <span><strong>${cap(MONTHS[m.month])} ${m.year}</strong> · ${m.days} días</span>
+      <span>${fmt1(stats.months[m.month].t)} °C</span>
+    </div>`).join("");
+  return `
+    <p class="meta">Temperatura media del periodo: <strong>${fmt1(avg)} °C</strong> · media de ${stats.years} años</p>
+    ${rows}`;
+}
 
-  const rows = months.map((m) => {
-    const risks = climate.risks.filter((r) => r.months.includes(m.month + 1));
-    const riskHtml = risks.map((r) => `
-      <div class="risk ${r.level}"><b>${LEVEL_LABEL[r.level]}</b>${esc(r.name)}<br><span class="meta">${esc(r.note)}</span></div>
-    `).join("") || '<div class="meta">Sin riesgos destacados.</div>';
-    return `
-      <div class="month">
-        <div class="month-head">
-          <strong>${cap(MONTHS[m.month])} ${m.year}</strong>
-          <span>${m.days} días · ${climate.temp[m.month]} °C · ${climate.rain[m.month]} mm</span>
-        </div>
-        ${riskHtml}
-      </div>`;
-  }).join("");
+function risksHtml(base, from, to) {
+  if (!state.startDate) return '<p class="meta">Elige la fecha de inicio para ver los riesgos de cada mes.</p>';
+  const items = riskItems(climateFor(base), monthBreakdown(from, to));
+  return items.map((r) => `
+    <div class="risk ${r.level}"><b>${LEVEL_LABEL[r.level]}</b>${esc(r.name)}<br><span class="meta">${esc(r.detail)}</span></div>
+  `).join("");
+}
 
-  return `<p class="meta">Temperatura media ponderada: <strong>${avg.toFixed(1)} °C</strong></p>${rows}`;
+function requisitosHtml(base) {
+  if (!base.iso2) return `<p class="meta">${ND}. Busca otra ciudad para asignar su país.</p>`;
+  if (base.iso2 === "ES") return "<p>Es tu país: no necesitas ningún trámite de entrada.</p>";
+  if (EU_ISO2.includes(base.iso2)) {
+    return `<p>${esc(base.country || "País de la UE")}: basta tu DNI o pasaporte en vigor. Sin límite de estancia para ciudadanos de la UE.</p>`;
+  }
+  const r = REQUISITOS[base.iso2];
+  if (!r) return `<p class="meta">${ND}. Consulta <a href="${REQUISITOS_FUENTE}" target="_blank" rel="noopener">exteriores.gob.es</a>.</p>`;
+  const over = r.maxDays && base.days > r.maxDays
+    ? `<div class="risk alto"><b>Aviso</b>Tu estancia (${base.days} días) supera el límite de ${r.maxDays} días por visita. Tendrías que salir del país antes.</div>`
+    : "";
+  return `
+    <dl class="req">
+      <dt>Visado o autorización</dt><dd>${esc(r.visa)}</dd>
+      <dt>Estancia máxima</dt><dd>${esc(r.stay)}</dd>
+      ${r.notes ? `<dt>Notas</dt><dd>${esc(r.notes)}</dd>` : ""}
+    </dl>
+    ${over}
+    <p class="meta">Pasaporte en vigor. Información orientativa: verifica en <a href="${REQUISITOS_FUENTE}" target="_blank" rel="noopener">exteriores.gob.es</a> antes de viajar.</p>`;
 }
 
 function destHtml(d, others) {
@@ -693,6 +892,7 @@ sheetBody.addEventListener("submit", (e) => {
     if (!p) return;
     base.name = p.name;
     base.country = p.country;
+    base.iso2 = p.iso2;
     base.lat = p.lat;
     base.lng = p.lng;
   } else if (e.target.id === "destForm") {
@@ -778,7 +978,7 @@ $("#baseForm").addEventListener("submit", (e) => {
   const p = basePicker.value();
   const days = Number(f.days);
   if (!p || !Number.isInteger(days) || days < 1) return;
-  state.bases.push({ id: uid(), name: p.name, country: p.country, lat: p.lat, lng: p.lng, days, destinations: [] });
+  state.bases.push({ id: uid(), name: p.name, country: p.country, iso2: p.iso2, lat: p.lat, lng: p.lng, days, destinations: [] });
   save();
   renderAll();
   baseDialog.close();
@@ -795,3 +995,4 @@ renderAll();
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("sw.js");
 }
+window.addEventListener("online", ensureClimate);

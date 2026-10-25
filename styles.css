@@ -317,3 +317,19 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.4); }
   font-weight: 700;
 }
 .legend .leg { color: var(--muted); font-size: 12px; padding-left: 30px; }
+
+/* Clima, riesgos y requisitos */
+.season { font-size: 13px; font-weight: 600; color: var(--accent); }
+.month-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid #eef2f5;
+  font-size: 14px;
+}
+.risk.nd b { background: #8a99a3; }
+.req { margin: 8px 0; font-size: 14px; }
+.req dt { font-weight: 600; margin-top: 8px; }
+.req dd { margin: 2px 0 0; }
+#sheet a { color: var(--accent); }
