@@ -345,3 +345,5 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.4); }
   stroke: #fff;
   stroke-width: 0.4px;
 }
+
+.warn { color: var(--alto); font-weight: 600; font-size: 13px; margin-top: 4px; }

@@ -25,6 +25,17 @@ const mapMarkers = $("#mapMarkers");
 const mapLegend = $("#mapLegend");
 const mapStats = $("#mapStats");
 
+// Comprueba al arrancar si el navegador deja escribir en localStorage
+const storageOk = (() => {
+  try {
+    localStorage.setItem(STORAGE_KEY + ":prueba", "1");
+    localStorage.removeItem(STORAGE_KEY + ":prueba");
+    return true;
+  } catch {
+    return false;
+  }
+})();
+
 let state = load();
 let climateStore = loadClimate();
 let openBaseId = null;
@@ -84,7 +95,12 @@ function load() {
 }
 
 function save() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  if (!storageOk) return;
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch {
+    alert("No se puede guardar en este navegador. Los datos se perderán al cerrar la app: usa Exportar antes de salir.");
+  }
 }
 
 function loadClimate() {
@@ -453,10 +469,13 @@ function renderSummary() {
   let dates = "Elige la fecha de inicio";
   if (state.startDate && assigned > 0) dates = `${fmt(dayToDate(1))} → ${fmt(dayToDate(assigned))}`;
   const destinations = state.bases.reduce((s, b) => s + b.destinations.length, 0);
+  const storage = storageOk
+    ? `<div class="meta">Guardado en este dispositivo: ${state.bases.length} bases · ${destinations} destinos</div>`
+    : `<div class="warn">⚠ Este navegador no deja guardar datos: se perderán al cerrar la app. Usa Exportar antes de salir.</div>`;
   summaryEl.innerHTML = `
     <div><strong>${assigned} / ${TOTAL_DAYS}</strong> días · ${balance}</div>
     <div class="meta">${dates}</div>
-    <div class="meta">Guardado en este dispositivo: ${state.bases.length} bases · ${destinations} destinos</div>`;
+    ${storage}`;
 }
 
 // Línea de la estación y la temperatura del mes dominante de la base
