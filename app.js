@@ -36,6 +36,10 @@ const storageOk = (() => {
   }
 })();
 
+const num = (v) => (typeof v === "number" && Number.isFinite(v) ? v : null);
+
+let loadError = null;
+
 // Diagnóstico: lo que había guardado en el iPhone antes de que la app lo cargue
 const savedAtStart = (() => {
   try {
@@ -64,7 +68,6 @@ function uid() {
   return Math.random().toString(36).slice(2, 10);
 }
 
-const num = (v) => (typeof v === "number" && Number.isFinite(v) ? v : null);
 
 // Para bases guardadas antes de tener código de país: se deduce del catálogo por nombre.
 function guessIso2(name) {
@@ -100,8 +103,6 @@ function normalizeState(raw) {
       })),
   };
 }
-
-let loadError = null;
 
 function load() {
   try {
