@@ -36,6 +36,15 @@ const storageOk = (() => {
   }
 })();
 
+// Diagnóstico: lo que había guardado en el iPhone antes de que la app lo cargue
+const savedAtStart = (() => {
+  try {
+    return localStorage.getItem(STORAGE_KEY);
+  } catch {
+    return null;
+  }
+})();
+
 let state = load();
 let climateStore = loadClimate();
 let openBaseId = null;
@@ -475,7 +484,8 @@ function renderSummary() {
   summaryEl.innerHTML = `
     <div><strong>${assigned} / ${TOTAL_DAYS}</strong> días · ${balance}</div>
     <div class="meta">${dates}</div>
-    ${storage}`;
+    ${storage}
+    <div class="meta">Diagnóstico al abrir: ${savedAtStart ? `había datos guardados (${savedAtStart.length} caracteres)` : "no había datos guardados"}</div>`;
 }
 
 // Línea de la estación y la temperatura del mes dominante de la base
