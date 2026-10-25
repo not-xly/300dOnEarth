@@ -91,12 +91,12 @@ function normalizeState(raw) {
         lat: num(b.lat),
         lng: num(b.lng),
         days: b.days,
-        nights: num(b.nights),
         budget: {
           flight: num(b.budget?.flight),
           perNight: num(b.budget?.perNight),
           perDay: num(b.budget?.perDay),
           perDestTrip: num(b.budget?.perDestTrip),
+          other: num(b.budget?.other),
         },
         destinations: (Array.isArray(b.destinations) ? b.destinations : [])
           .filter((d) => d && typeof d.name === "string")
@@ -356,22 +356,22 @@ function alertsFor(base, from, to) {
 
 const eur = (n) => n.toLocaleString("es-ES", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
 
-// Noches de la base: por defecto, una por cada día
-const nightsOf = (base) => base.nights ?? base.days;
-
 // Partidas del presupuesto de una base en euros (lo que no está rellenado cuenta como 0)
 function budgetOf(base) {
   const b = base.budget;
   const flight = b.flight ?? 0;
-  const lodging = (b.perNight ?? 0) * nightsOf(base);
+  // Días y noches coinciden: el alojamiento se cobra por cada día de la base
+  const lodging = (b.perNight ?? 0) * base.days;
   const daily = (b.perDay ?? 0) * base.days;
   const destTrips = (b.perDestTrip ?? 0) * base.destinations.length;
+  const other = b.other ?? 0;
   return {
     flight,
     lodging,
     daily,
     destTrips,
-    total: flight + lodging + daily + destTrips,
+    other,
+    total: flight + lodging + daily + destTrips + other,
     filled: Object.values(b).some((v) => v != null),
   };
 }
@@ -381,7 +381,13 @@ function readBudget(f) {
     const n = toNum(v);
     return Number.isFinite(n) && n >= 0 ? n : null;
   };
-  return { flight: amount(f.flight), perNight: amount(f.perNight), perDay: amount(f.perDay), perDestTrip: amount(f.perDestTrip) };
+  return {
+    flight: amount(f.flight),
+    perNight: amount(f.perNight),
+    perDay: amount(f.perDay),
+    perDestTrip: amount(f.perDestTrip),
+    other: amount(f.other),
+  };
 }
 
 // ---------- Buscador de ciudades (catálogo offline + Internet si hay conexión) ----------
@@ -561,6 +567,7 @@ function openBudget() {
     <div class="budget-line"><span>Alojamiento</span><strong>${eur(sum("lodging"))}</strong></div>
     <div class="budget-line"><span>Gastos diarios</span><strong>${eur(sum("daily"))}</strong></div>
     <div class="budget-line"><span>Viajes a destinos</span><strong>${eur(sum("destTrips"))}</strong></div>
+    <div class="budget-line"><span>Otros gastos</span><strong>${eur(sum("other"))}</strong></div>
     <div class="budget-line total"><span>Total</span><strong>${eur(sum("total"))}</strong></div>
     <h3>Por ciudad base</h3>
     <ul class="list">${rows || '<li class="meta">Aún no hay ciudades base.</li>'}</ul>
@@ -884,14 +891,9 @@ function renderSheet() {
     </div>
     <p class="meta">Días ${from}–${to}${range}</p>
     <form id="baseEdit" class="stack">
-      <div class="row2">
-        <label>Días
-          <input name="days" type="number" inputmode="numeric" min="1" value="${base.days}" required>
-        </label>
-        <label>Noches
-          <input name="nights" type="number" inputmode="numeric" min="0" value="${nightsOf(base)}" required>
-        </label>
-      </div>
+      <label>Días / noches
+        <input name="days" type="number" inputmode="numeric" min="1" value="${base.days}" required>
+      </label>
       <button class="primary" type="submit">Guardar cambios</button>
     </form>
 
@@ -967,7 +969,7 @@ function budgetFormHtml(base) {
       <label>Alojamiento: precio por noche
         ${input("perNight")}
       </label>
-      <div class="budget-line"><span>× ${nightsOf(base)} noches</span><strong data-sub="lodging">${eur(t.lodging)}</strong></div>
+      <div class="budget-line"><span>× ${base.days} noches</span><strong data-sub="lodging">${eur(t.lodging)}</strong></div>
 
       <label>Coste medio por día (comida, transporte, actividades)
         ${input("perDay")}
@@ -978,6 +980,11 @@ function budgetFormHtml(base) {
         ${input("perDestTrip")}
       </label>
       <div class="budget-line"><span>× ${base.destinations.length} destinos</span><strong data-sub="destTrips">${eur(t.destTrips)}</strong></div>
+
+      <label>Otros gastos (eventos musicales o deportivos, museos…)
+        ${input("other")}
+      </label>
+      <div class="budget-line"><span>Otros gastos</span><strong data-sub="other">${eur(t.other)}</strong></div>
 
       <div class="budget-line total"><span>Total ${esc(base.name)}</span><strong data-sub="total">${eur(t.total)}</strong></div>
       <button class="primary" type="submit">Guardar presupuesto</button>
@@ -1104,13 +1111,7 @@ sheetBody.addEventListener("submit", (e) => {
 
   if (e.target.id === "baseEdit") {
     const days = Number(f.days);
-    const nights = Number(f.nights);
-    if (!Number.isInteger(days) || days < 1 || !Number.isInteger(nights) || nights < 0) {
-      return alert("Revisa los días y las noches.");
-    }
-    // Las noches siguen a los días mientras no se cambien a mano
-    const untouched = base.nights == null && nights === nightsOf(base);
-    base.nights = untouched || nights === days ? null : nights;
+    if (!Number.isInteger(days) || days < 1) return alert("Revisa los días.");
     base.days = days;
   } else if (e.target.id === "budgetForm") {
     base.budget = readBudget(f);
@@ -1225,8 +1226,7 @@ $("#baseForm").addEventListener("submit", (e) => {
     lat: p.lat,
     lng: p.lng,
     days,
-    nights: null,
-    budget: { flight: null, perNight: null, perDay: null, perDestTrip: null },
+    budget: { flight: null, perNight: null, perDay: null, perDestTrip: null, other: null },
     destinations: [],
   });
   save();
