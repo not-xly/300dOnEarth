@@ -40,7 +40,7 @@ const num = (v) => (typeof v === "number" && Number.isFinite(v) ? v : null);
 
 let loadError = null;
 
-// Diagnóstico: lo que había guardado en el iPhone antes de que la app lo cargue
+// Lo que había guardado en el iPhone antes de que la app lo cargue (para la copia de seguridad)
 const savedAtStart = (() => {
   try {
     return localStorage.getItem(STORAGE_KEY);
@@ -494,8 +494,7 @@ function renderSummary() {
   summaryEl.innerHTML = `
     <div><strong>${assigned} / ${TOTAL_DAYS}</strong> días · ${balance}</div>
     <div class="meta">${dates}</div>
-    ${storage}
-    <div class="meta">Diagnóstico al abrir: ${savedAtStart ? `había datos guardados (${savedAtStart.length} caracteres)` : "no había datos guardados"}${loadError ? ` · error al leer: ${esc(loadError)}` : ""}</div>`;
+    ${storage}`;
 }
 
 // Línea de la estación y la temperatura del mes dominante de la base
