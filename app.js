@@ -113,10 +113,6 @@ function fmt1(n) {
   return n == null ? "—" : n.toFixed(1).replace(".", ",");
 }
 
-function toNum(v) {
-  return v === "" || v == null ? null : Number(v);
-}
-
 function norm(s) {
   return s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
 }
@@ -476,7 +472,6 @@ function renderTimeline() {
   layout().forEach(({ base, from, to }) => {
     const block = document.createElement("article");
     block.className = "base";
-    block.style.flex = `${base.days} 1 0px`;
 
     const dates = state.startDate ? `${fmt(dayToDate(from))} → ${fmt(dayToDate(to))}` : "";
     const alerts = alertsFor(base, from, to);
@@ -787,18 +782,10 @@ function renderSheet() {
     </ul>
     <form id="destForm" class="stack">
       <div data-picker="dest"></div>
-      <div class="row2">
-        <label>Km desde la base
-          <input name="km" type="number" inputmode="decimal" min="0">
-        </label>
-        <label>Horas de viaje
-          <input name="hours" type="number" inputmode="decimal" min="0" step="0.5">
-        </label>
-      </div>
       <label>Notas
         <input name="notes">
       </label>
-      <p class="meta">Si dejas los km vacíos y hay coordenadas, se calcula la distancia en línea recta.</p>
+      <p class="meta">La distancia en línea recta se calcula sola cuando hay coordenadas.</p>
       <button class="primary" type="submit">+ Añadir destino</button>
     </form>
   `;
@@ -904,15 +891,14 @@ sheetBody.addEventListener("submit", (e) => {
   } else if (e.target.id === "destForm") {
     const p = destPicker.value();
     if (!p) return;
-    let km = toNum(f.km);
-    if (km == null && p.lat != null && base.lat != null) {
-      km = Math.round(haversine(base.lat, base.lng, p.lat, p.lng));
-    }
+    const km = p.lat != null && base.lat != null
+      ? Math.round(haversine(base.lat, base.lng, p.lat, p.lng))
+      : null;
     base.destinations.push({
       id: uid(),
       name: p.name,
       km,
-      hours: toNum(f.hours),
+      hours: null,
       notes: f.notes.trim(),
       lat: p.lat,
       lng: p.lng,

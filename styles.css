@@ -65,7 +65,8 @@ body {
 .timeline .empty { text-align: center; color: var(--muted); margin-top: 40px; }
 
 .base {
-  min-height: 64px;
+  flex: none;
+  min-height: 84px;
   background: var(--card);
   border-radius: 12px;
   display: flex;
