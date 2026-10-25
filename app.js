@@ -30,7 +30,6 @@ let openBaseId = null;
 let view = { ...WORLD_VIEW };
 let basePicker = null;
 let destPicker = null;
-let locPicker = null;
 
 // ---------- Persistencia ----------
 
@@ -728,7 +727,6 @@ function renderSheet() {
   const others = state.bases.filter((b) => b.id !== base.id);
   const range = state.startDate ? ` · ${fmt(dayToDate(from))} → ${fmt(dayToDate(to))}` : "";
 
-  locPicker = cityPicker("Buscar otra ciudad…");
   destPicker = cityPicker("Buscar destino (ciudad o lugar)…");
 
   sheetBody.innerHTML = `
@@ -750,11 +748,6 @@ function renderSheet() {
       <button type="button" data-move="1">↓ Bajar</button>
       <button type="button" class="danger" data-del>Eliminar</button>
     </div>
-    <form id="locForm" class="stack">
-      <div data-picker="loc"></div>
-      <button class="small" type="submit">Cambiar ciudad</button>
-    </form>
-
     <h3>Clima</h3>
     <div id="sheetClimate"></div>
 
@@ -786,7 +779,6 @@ function renderSheet() {
     </form>
   `;
 
-  sheetBody.querySelector('[data-picker="loc"]').append(locPicker.el);
   sheetBody.querySelector('[data-picker="dest"]').append(destPicker.el);
   fillClimateSections();
 }
@@ -887,14 +879,6 @@ sheetBody.addEventListener("submit", (e) => {
     if (!name || !Number.isInteger(days) || days < 1) return alert("Revisa el nombre y los días.");
     base.name = name;
     base.days = days;
-  } else if (e.target.id === "locForm") {
-    const p = locPicker.value();
-    if (!p) return;
-    base.name = p.name;
-    base.country = p.country;
-    base.iso2 = p.iso2;
-    base.lat = p.lat;
-    base.lng = p.lng;
   } else if (e.target.id === "destForm") {
     const p = destPicker.value();
     if (!p) return;
