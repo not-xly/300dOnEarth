@@ -333,3 +333,14 @@ dialog::backdrop { background: rgba(0, 0, 0, 0.4); }
 .req dt { font-weight: 600; margin-top: 8px; }
 .req dd { margin: 2px 0 0; }
 #sheet a { color: var(--accent); }
+
+/* Destinos en el mapa */
+.spoke { stroke: #3b82c4; stroke-width: 1; fill: none; vector-effect: non-scaling-stroke; }
+.dest-dot { fill: #3b82c4; stroke: #fff; stroke-width: 0.3; }
+.dest-name {
+  fill: #1d4f7a;
+  font-family: -apple-system, system-ui, sans-serif;
+  paint-order: stroke;
+  stroke: #fff;
+  stroke-width: 0.4px;
+}

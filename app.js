@@ -20,6 +20,7 @@ const sheet = $("#sheet");
 const sheetBody = $("#sheetBody");
 const mapSvg = $("#mapSvg");
 const mapRoute = $("#mapRoute");
+const mapSpokes = $("#mapSpokes");
 const mapMarkers = $("#mapMarkers");
 const mapLegend = $("#mapLegend");
 const mapStats = $("#mapStats");
@@ -572,12 +573,39 @@ function renderMap() {
   renderLegend();
 }
 
+const MAP_OFFSETS = [-720, -360, 0, 360, 720];
+
+// Destinos de cada base con coordenadas: línea fina desde la base y punto con su nombre
+function destinationItems() {
+  const items = [];
+  const dr = view.w / 220;
+  const fs = view.w / 70;
+  routePoints().forEach((p) => {
+    if (typeof p.n !== "number") return;
+    state.bases[p.n - 1].destinations.forEach((d) => {
+      if (d.lat == null || d.lng == null) return;
+      // Destino en la copia del mapa más cercana a su base
+      const x = p.lon + wrap180(d.lng - p.lon) + 180;
+      const y = 90 - d.lat;
+      items.push(`
+        <line x1="${p.x}" y1="${p.y}" x2="${x}" y2="${y}" class="spoke"></line>
+        <circle cx="${x}" cy="${y}" r="${dr}" class="dest-dot"></circle>
+        <text x="${x}" y="${y - dr * 1.6}" font-size="${fs}" text-anchor="middle" class="dest-name">${esc(d.name)}</text>`);
+    });
+  });
+  return items;
+}
+
 function drawMarkers() {
   mapSvg.setAttribute("viewBox", `${view.x} ${view.y} ${view.w} ${view.h}`);
   const pts = routePoints();
   const r = view.w / 90;
   const fs = view.w / 45;
-  const markers = [-720, -360, 0, 360, 720].flatMap((off) =>
+  const spokes = MAP_OFFSETS.flatMap((off) =>
+    destinationItems().map((s) => `<g transform="translate(${off} 0)">${s}</g>`)
+  );
+  mapSpokes.innerHTML = spokes.join("");
+  const markers = MAP_OFFSETS.flatMap((off) =>
     pts.map((p) => `
       <g transform="translate(${p.x + off} ${p.y})">
         <circle r="${r}" class="pin"></circle>
@@ -603,7 +631,8 @@ function renderLegend() {
         leg = `<li class="leg">↓ distancia desconocida</li>`;
       }
     }
-    const meta = st.days ? `${st.days} días` : "salida, no cuenta en los 300 días";
+    const nd = typeof st.n === "number" ? state.bases[st.n - 1].destinations.length : 0;
+    const meta = st.days ? `${st.days} días${nd ? ` · ${nd} destinos` : ""}` : "salida, no cuenta en los 300 días";
     return `
       <li><span class="num">${st.n}</span><strong>${esc(st.name)}</strong>
         <span class="meta">${meta}${st.lat == null ? " · sin coordenadas" : ""}</span></li>${leg}`;
@@ -732,14 +761,9 @@ function renderSheet() {
   sheetBody.innerHTML = `
     <h2>${esc(base.name)}</h2>
     <form id="baseEdit" class="stack">
-      <div class="row2">
-        <label>Nombre
-          <input name="name" value="${esc(base.name)}" required>
-        </label>
-        <label>Días
-          <input name="days" type="number" inputmode="numeric" min="1" value="${base.days}" required>
-        </label>
-      </div>
+      <label>Días
+        <input name="days" type="number" inputmode="numeric" min="1" value="${base.days}" required>
+      </label>
       <button class="primary" type="submit">Guardar cambios</button>
     </form>
     <p class="meta">Días ${from}–${to}${range}</p>
@@ -874,10 +898,8 @@ sheetBody.addEventListener("submit", (e) => {
   const f = Object.fromEntries(new FormData(e.target));
 
   if (e.target.id === "baseEdit") {
-    const name = f.name.trim();
     const days = Number(f.days);
-    if (!name || !Number.isInteger(days) || days < 1) return alert("Revisa el nombre y los días.");
-    base.name = name;
+    if (!Number.isInteger(days) || days < 1) return alert("Revisa los días.");
     base.days = days;
   } else if (e.target.id === "destForm") {
     const p = destPicker.value();
