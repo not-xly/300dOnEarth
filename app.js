@@ -113,6 +113,10 @@ function fmt1(n) {
   return n == null ? "—" : n.toFixed(1).replace(".", ",");
 }
 
+function toNum(v) {
+  return v === "" || v == null ? null : Number(v);
+}
+
 function norm(s) {
   return s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
 }
@@ -306,7 +310,7 @@ function alertsFor(base, from, to) {
 
 // ---------- Buscador de ciudades (catálogo offline + Internet si hay conexión) ----------
 
-function cityPicker(placeholder) {
+function cityPicker(placeholder, onChange = () => {}) {
   const el = document.createElement("div");
   el.className = "picker";
   el.innerHTML = `
@@ -372,6 +376,7 @@ function cityPicker(placeholder) {
     status.textContent = picked.lat != null
       ? `${picked.country || ""} · ${picked.lat.toFixed(2)}, ${picked.lng.toFixed(2)}`
       : "Sin coordenadas";
+    onChange();
   }
 
   // Enter no debe enviar el formulario que contiene el buscador
@@ -383,6 +388,7 @@ function cityPicker(placeholder) {
     picked = null;
     status.textContent = "";
     query = input.value.trim();
+    onChange();
     if (!query) {
       list.hidden = true;
       list.innerHTML = "";
@@ -400,6 +406,7 @@ function cityPicker(placeholder) {
       input.value = query;
       list.hidden = true;
       status.textContent = "Sin coordenadas";
+      onChange();
       return;
     }
     pick(options[Number(btn.dataset.i)]);
@@ -751,7 +758,7 @@ function renderSheet() {
   const others = state.bases.filter((b) => b.id !== base.id);
   const range = state.startDate ? ` · ${fmt(dayToDate(from))} → ${fmt(dayToDate(to))}` : "";
 
-  destPicker = cityPicker("Buscar destino (ciudad o lugar)…");
+  destPicker = cityPicker("Buscar destino (ciudad o lugar)…", refreshManualFields);
 
   sheetBody.innerHTML = `
     <h2>${esc(base.name)}</h2>
@@ -782,16 +789,36 @@ function renderSheet() {
     </ul>
     <form id="destForm" class="stack">
       <div data-picker="dest"></div>
+      <div id="manualFields" class="stack" hidden>
+        <p class="meta">Sin coordenadas no se puede calcular la distancia: introdúcela a mano.</p>
+        <div class="row2">
+          <label>Km desde la base
+            <input name="km" type="number" inputmode="decimal" min="0">
+          </label>
+          <label>Horas de viaje
+            <input name="hours" type="number" inputmode="decimal" min="0" step="0.5">
+          </label>
+        </div>
+      </div>
       <label>Notas
         <input name="notes">
       </label>
-      <p class="meta">La distancia en línea recta se calcula sola cuando hay coordenadas.</p>
       <button class="primary" type="submit">+ Añadir destino</button>
     </form>
   `;
 
   sheetBody.querySelector('[data-picker="dest"]').append(destPicker.el);
   fillClimateSections();
+}
+
+// Muestra km y horas a mano solo si la distancia no se puede calcular (falta alguna coordenada)
+function refreshManualFields() {
+  const box = sheetBody.querySelector("#manualFields");
+  const base = state.bases.find((b) => b.id === openBaseId);
+  if (!box || !base) return;
+  const p = destPicker?.value();
+  const auto = p && p.lat != null && base.lat != null;
+  box.hidden = !p || auto;
 }
 
 // Solo actualiza las secciones de clima y riesgos, para no perder lo que se esté escribiendo en la ficha
@@ -891,14 +918,12 @@ sheetBody.addEventListener("submit", (e) => {
   } else if (e.target.id === "destForm") {
     const p = destPicker.value();
     if (!p) return;
-    const km = p.lat != null && base.lat != null
-      ? Math.round(haversine(base.lat, base.lng, p.lat, p.lng))
-      : null;
+    const auto = p.lat != null && base.lat != null;
     base.destinations.push({
       id: uid(),
       name: p.name,
-      km,
-      hours: null,
+      km: auto ? Math.round(haversine(base.lat, base.lng, p.lat, p.lng)) : toNum(f.km),
+      hours: auto ? null : toNum(f.hours),
       notes: f.notes.trim(),
       lat: p.lat,
       lng: p.lng,
