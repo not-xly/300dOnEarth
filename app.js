@@ -908,6 +908,9 @@ function renderSheet() {
       <h3>Riesgos climáticos</h3>
       <div id="sheetRisks"></div>
 
+      <h3>Riesgo político del país</h3>
+      ${riesgoPaisHtml(base, from)}
+
       <h3>Requisitos de entrada (ciudadano español)</h3>
       ${requisitosHtml(base)}
     </div>
@@ -1030,6 +1033,33 @@ function risksHtml(base, from, to) {
   return items.map((r) => `
     <div class="risk ${r.level}"><b>${LEVEL_LABEL[r.level]}</b>${esc(r.name)}<br><span class="meta">${esc(r.detail)}</span></div>
   `).join("");
+}
+
+// Días que faltan para que empiece la base (null si no hay fecha de inicio)
+function daysUntilStart(from) {
+  const start = dayToDate(from);
+  if (!start) return null;
+  const today = new Date();
+  const t = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate());
+  return Math.round((start - t) / 86400000);
+}
+
+function riesgoPaisHtml(base, from) {
+  const days = daysUntilStart(from);
+  let timing = "";
+  if (days != null && days >= 0 && days <= 60) {
+    timing = `<div class="risk alto"><b>Próxima</b>La base empieza en ${days} días: conviene revisar el riesgo político.</div>`;
+  } else if (days != null && days > 60) {
+    timing = `<p class="meta">La base empieza en ${days} días.</p>`;
+  }
+  const r = base.iso2 ? RIESGO_PAIS[base.iso2] : null;
+  if (!r || !r.nivel) {
+    return `${timing}<p class="meta">${ND}. Consulta <a href="${RIESGO_FUENTE}" target="_blank" rel="noopener">exteriores.gob.es</a>.</p>`;
+  }
+  const label = { sin: "Sin recomendaciones especiales", precaucion: "Precaución", desaconsejado: "Desaconsejado" }[r.nivel];
+  const cls = { sin: "bajo", precaucion: "medio", desaconsejado: "alto" }[r.nivel];
+  const note = r.nota ? `${esc(r.nota)} · ` : "";
+  return `${timing}<div class="risk ${cls}"><b>${esc(label)}</b>${esc(base.country || "")}<br><span class="meta">${note}Revisado: ${esc(r.fecha || "sin fecha")} · verificar en exteriores.gob.es</span></div>`;
 }
 
 function requisitosHtml(base) {

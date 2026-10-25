@@ -1,7 +1,7 @@
 // Cambia la versión del caché cuando modifiques los archivos de la app.
-const CACHE = "300dOnEarth-v8";
+const CACHE = "300dOnEarth-v9";
 const ASSETS = [
-  "./", "index.html", "styles.css", "app.js", "data-requisitos.js", "data-cities.js", "data-world.js",
+  "./", "index.html", "styles.css", "app.js", "data-requisitos.js", "data-riesgo.js", "data-cities.js", "data-world.js",
   "manifest.json", "icon-180.png", "icon-192.png", "icon-512.png",
 ];
 // Archivos pesados o que casi no cambian: se sirven desde caché y solo se descargan si faltan.
